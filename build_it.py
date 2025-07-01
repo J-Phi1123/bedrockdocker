@@ -2,6 +2,7 @@
 
 import requests
 import subprocess
+import time
 
 def get_latest_linux_bedrock_url():
     api_url = "https://net-secondary.web.minecraft-services.net/api/v1.0/download/links"
@@ -21,11 +22,11 @@ def get_latest_linux_bedrock_url():
 
 def download_with_curl(download_url, output_file):
     curl_cmd = [
-        "curl", "-i", "-s", "-k", "-X", "GET",
+        "curl", "-s", "-k", "-X", "GET",
         "-H", "Host: www.minecraft.net",
         "-H", 'Sec-Ch-Ua: "Not:A-Brand";v="99", "Chromium";v="112"',
         "-H", "Sec-Ch-Ua-Mobile: ?0",
-        '-H', 'Sec-Ch-Ua-Platform: "Windows"',
+        "-H", 'Sec-Ch-Ua-Platform: "Windows"',
         "-H", "Upgrade-Insecure-Requests: 1",
         "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.5615.50 Safari/537.36",
         "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -38,8 +39,7 @@ def download_with_curl(download_url, output_file):
         "-H", "Accept-Language: en-US,en;q=0.9",
         download_url,
         "-o", output_file
-    ]
-    
+        ]        
     print("➡ Running curl download...")
     subprocess.run(curl_cmd, check=True)
     print(f"✅ Downloaded to {output_file}")
@@ -53,6 +53,7 @@ def main():
     except Exception as e:
         print(f"❌ Error: {e}")
 
+    time.sleep(2)
     # Now I have the latest version
     subprocess.run(["sh", "build_it.sh"], check=True)
 
