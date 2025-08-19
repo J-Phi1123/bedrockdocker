@@ -140,6 +140,7 @@ def main():
     output_zip = os.getenv("BEDROCK_ZIP", "bedrock-server.zip")
     version_file = Path(os.getenv("BEDROCK_VERSION_FILE", "built_version.txt"))
     force_build = truthy(os.getenv("FORCE_BUILD")) 
+    print(force_build)
 
     # Discover latest URL + version
     try:
