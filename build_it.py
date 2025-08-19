@@ -1,17 +1,29 @@
 #! /usr/bin/env python3
 """
-Combined build script:
-- Fetches the latest Bedrock Linux server URL
+Combined build script with version guard:
+
+- Fetches the latest Bedrock Linux server URL + version
+- Skips build if that version was already built (tracked in a local file)
 - Downloads the ZIP with curl (headers included for reliability)
 - Logs into Docker (using --password-stdin)
 - Builds and pushes the Docker image
 - Optionally commits & pushes changes to Git (skips if no staged changes)
+- On success, writes the built version to the version file
+
+Environment overrides:
+  DOCKER_USERNAME         default: "jackclark1123"
+  DOCKER_IMAGE            default: "<DOCKER_USERNAME>/bedrockserver"
+  DOCKER_PASSWORD_FILE    default: "pass"
+  BEDROCK_ZIP             default: "bedrock-server.zip"
+  BEDROCK_VERSION_FILE    default: "built_version.txt"
+  FORCE_BUILD             if set to 1/true/yes, forces build even if version matches
 """
 import os
 import shlex
 import subprocess
 import time
 from datetime import datetime
+from pathlib import Path
 
 import requests
 
@@ -21,6 +33,11 @@ def run(cmd, **kwargs):
     printable = " ".join(shlex.quote(str(c)) for c in cmd)
     print(f"$ {printable}")
     return subprocess.run(cmd, check=True, **kwargs)
+
+
+def truthy(val: str) -> bool:
+    print(val)
+    return str(val).strip().lower() in {"1", "true", "yes", "y", "on"} if val is not None else False
 
 
 def get_latest_linux_bedrock_url():
@@ -35,6 +52,23 @@ def get_latest_linux_bedrock_url():
     download_url = linux["downloadUrl"]
     version = linux.get("version", "unknown")
     return download_url, version
+
+
+def read_prev_version(version_file: Path) -> str:
+    try:
+        return version_file.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        print(f"⚠️  Could not read version file {version_file}: {e}")
+        return None
+
+
+def write_version_atomic(version_file: Path, version: str) -> None:
+    tmp = version_file.with_suffix(version_file.suffix + ".tmp")
+    tmp.write_text(version + "\n", encoding="utf-8")
+    tmp.replace(version_file)
+    print(f"📝 Wrote built version {version} to {version_file}")
 
 
 def download_with_curl(download_url, output_file):
@@ -104,30 +138,63 @@ def main():
     image = os.getenv("DOCKER_IMAGE", f"{username}/bedrockserver")
     pass_file = os.getenv("DOCKER_PASSWORD_FILE", "pass")
     output_zip = os.getenv("BEDROCK_ZIP", "bedrock-server.zip")
+    version_file = Path(os.getenv("BEDROCK_VERSION_FILE", "built_version.txt"))
+    force_build = truthy(os.getenv("FORCE_BUILD")) 
 
+    # Discover latest URL + version
     try:
         download_url, version = get_latest_linux_bedrock_url()
         print(f"🎉 Latest version: {version}")
         print(f"🔗 Download URL: {download_url}")
-        download_with_curl(download_url, output_zip)
     except Exception as e:
-        print(f"❌ Error during Bedrock download: {e}")
+        print(f"❌ Error during Bedrock API check: {e}")
+        # If we can't determine version, proceed with build attempt (can't guard).
+        download_url, version = None, "unknown"
+
+    # Version guard (skip build if same and not forced)
+    prev = read_prev_version(version_file)
+    if version != "unknown" and prev == version and not force_build:
+        print(f"✅ Already built version {version}; skipping build. Set FORCE_BUILD=1 to override.")
+        return
+
+    # Download if we have a URL
+    if download_url:
+        try:
+            download_with_curl(download_url, output_zip)
+        except Exception as e:
+            print(f"❌ Download error: {e}")
+            # If download fails, abort build to avoid pushing stale image.
+            return
 
     time.sleep(2)
+
+    built_ok = False
 
     # Docker: logout → login → build/push → logout
     docker_logout()
     try:
         docker_login(username, pass_file=pass_file)
         docker_build_and_push(image)
+        built_ok = True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Docker step failed: {e}")
     finally:
         docker_logout()
 
     # Git add/commit/push (if there are changes)
-    try:
-        git_add_commit_push()
-    except subprocess.CalledProcessError as e:
-        print(f"⚠️  Git step failed: {e}")
+    if built_ok:
+        try:
+            git_add_commit_push()
+        except subprocess.CalledProcessError as e:
+            # Non-fatal for version recording
+            print(f"⚠️  Git step failed: {e}")
+
+    # Record version only if build succeeded and version is known
+    if built_ok and version != "unknown":
+        try:
+            write_version_atomic(version_file, version)
+        except Exception as e:
+            print(f"⚠️  Could not write version file: {e}")
 
 
 if __name__ == "__main__":
