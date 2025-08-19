@@ -36,7 +36,6 @@ def run(cmd, **kwargs):
 
 
 def truthy(val: str) -> bool:
-    print(val)
     return str(val).strip().lower() in {"1", "true", "yes", "y", "on"} if val is not None else False
 
 
@@ -140,7 +139,6 @@ def main():
     output_zip = os.getenv("BEDROCK_ZIP", "bedrock-server.zip")
     version_file = Path(os.getenv("BEDROCK_VERSION_FILE", "built_version.txt"))
     force_build = truthy(os.getenv("FORCE_BUILD")) 
-    print(force_build)
 
     # Discover latest URL + version
     try:
@@ -154,6 +152,7 @@ def main():
 
     # Version guard (skip build if same and not forced)
     prev = read_prev_version(version_file)
+    print("Previous", prev)
     if version != "unknown" and prev == version and not force_build:
         print(f"✅ Already built version {version}; skipping build. Set FORCE_BUILD=1 to override.")
         return
