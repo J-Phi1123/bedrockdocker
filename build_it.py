@@ -190,7 +190,7 @@ def main():
             print(f"⚠️  Git step failed: {e}")
 
     # Record version only if build succeeded and version is known
-    if built_ok and version != "unknown":
+    if built_ok:
         try:
             write_version_atomic(version_file, version)
         except Exception as e:
