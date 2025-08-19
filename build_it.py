@@ -187,7 +187,7 @@ def git_add_commit_push():
     run(["git", "commit", "-m", message])
     run(["git", "push"])
 
-def pull_latest_docker():
+def pull_latest_docker(image: str):
     run(["docker", "pull", image]) 
 
 
@@ -246,7 +246,7 @@ def main():
     if built_ok:
         try:
             git_add_commit_push()
-            pull_latest_docker()
+            pull_latest_docker(image)
         except subprocess.CalledProcessError as e:
             print(f"⚠️  Git step failed: {e}")
 
